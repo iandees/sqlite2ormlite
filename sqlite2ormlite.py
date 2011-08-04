@@ -45,9 +45,9 @@ javaTypes = {
 }
 ormliteTypes = {
     'text': "STRING",
-    'integer': "INTEGER",
-    'integer PKEY': "INTEGER",
-    'real': "DOUBLE",
+    'integer': "INTEGER_OBJ",
+    'integer PKEY': "INTEGER_OBJ",
+    'real': "DOUBLE_OBJ",
 }
 
 if len(sys.argv) < 4:
@@ -117,18 +117,23 @@ for table in tableNames:
     type_data = []
     c.execute('PRAGMA table_info("%s")' % (table))
     for row in c:
+        print row[3]
         type_data.append({
             'java_type': javaTypes[row[2]],
             'ormlite_type': ormliteTypes[row[2]],
             'member_name': underscoreToCamelcase(row[1], False),
             'getter_name': 'get' + underscoreToCamelcase(row[1], True),
-            'not_null': row[3],
+            'is_key': (True if row[2][-5:] == ' PKEY' else False),
+            'not_null': bool(row[3]),
         })
 
+    # Generate types
     for data in type_data:
         f.write('    ')
         f.write('@DatabaseField(dataType = DataType.')
         f.write(data['ormlite_type'])
+        if data['not_null'] == True:
+            f.write(', canBeNull = false')
         f.write(')\n')
 
         f.write('    ')
@@ -139,6 +144,12 @@ for table in tableNames:
         f.write(';\n')
     
         f.write('\n')
+
+    # Generate required no-arg constructor
+    f.write('    ')
+    f.write(className)
+    f.write('() { /* Empty constructor for ORMlite */ }\n')
+    f.write('\n')
 
     for data in type_data:
         f.write('    ')
