@@ -119,13 +119,25 @@ for table in tableNames:
     for row in c:
         print row[3]
         type_data.append({
+            'column_name': row[1],
             'java_type': javaTypes[row[2]],
+            'java_column_const': 'COLUMN_' + row[1].upper(),
             'ormlite_type': ormliteTypes[row[2]],
             'member_name': underscoreToCamelcase(row[1], False),
             'getter_name': 'get' + underscoreToCamelcase(row[1], True),
             'is_key': (True if row[2][-5:] == ' PKEY' else False),
             'not_null': bool(row[3]),
         })
+
+    # Generate COLUMN_* constants to help with querying
+    for data in type_data:
+        f.write('    ')
+        f.write('public static final String ')
+        f.write(data['java_column_const'])
+        f.write(' = "')
+        f.write(data['column_name'])
+        f.write('";\n')
+    f.write('\n')
 
     # Generate types
     for data in type_data:
@@ -134,6 +146,8 @@ for table in tableNames:
         f.write(data['ormlite_type'])
         if data['not_null'] == True:
             f.write(', canBeNull = false')
+        f.write(', columnName = ')
+        f.write(data['java_column_const'])
         f.write(')\n')
 
         f.write('    ')
