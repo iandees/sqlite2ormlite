@@ -85,39 +85,23 @@ print "Accepted tables: ", ', '.join(tableNames)
 
 rootPath = "%s/%s/" % (srcDir, packageName.replace('.', '/'))
 
+# Parse the database schema into memory
+classes = {}
 for table in tableNames:
     className = underscoreToCamelcase(str(table))
     className = singularize(className)
 
     fileName = rootPath + className + ".java"
-    print "Creating ", fileName
 
-    f = open(fileName, 'w')
-
-    f.write('package ')
-    f.write(packageName)
-    f.write(';\n')
-
-    f.write('\n')
-    f.write('import com.j256.ormlite.field.DataType;\n')
-    f.write('import com.j256.ormlite.field.DatabaseField;\n')
-    f.write('import com.j256.ormlite.table.DatabaseTable;\n')
-    f.write('\n')
-
-    f.write('@DatabaseTable(tableName = "')
-    f.write(table)
-    f.write('")\n')
+    clazz = {
+        'java_class_name': className,
+        'java_file_name': fileName,
+        'columns': []
+    }
     
-    f.write('public class ')
-    f.write(className)
-    f.write(' {\n')
-
-    f.write('\n')
-
-    type_data = []
     c.execute('PRAGMA table_info("%s")' % (table))
     for row in c:
-        type_data.append({
+        clazz['columns'].append({
             'column_name': row[1],
             'java_type': javaTypes[row[2]],
             'java_column_const': 'COLUMN_' + row[1].upper(),
@@ -127,6 +111,33 @@ for table in tableNames:
             'is_key': (True if row[2][-5:] == ' PKEY' else False),
             'not_null': bool(row[3]),
         })
+
+    classes[table] = clazz
+
+# Look for foreign fields using <column_name>Id
+
+# Output to Java files
+for (table, clazz) in classes.items():
+    fileName = clazz['java_file_name']
+    className = clazz['java_class_name']
+    type_data = clazz['columns']
+    print "Creating ", fileName
+
+    f = open(fileName, 'w')
+
+    f.write('package %s;\n' % (packageName))
+
+    f.write('\n')
+    f.write('import com.j256.ormlite.field.DataType;\n')
+    f.write('import com.j256.ormlite.field.DatabaseField;\n')
+    f.write('import com.j256.ormlite.table.DatabaseTable;\n')
+    f.write('\n')
+
+    f.write('@DatabaseTable(tableName = "%s")\n' % (table))
+    
+    f.write('public class %s {\n' % (className))
+
+    f.write('\n')
 
     # Generate COLUMN_* constants to help with querying
     for data in type_data:
