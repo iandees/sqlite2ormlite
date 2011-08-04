@@ -96,13 +96,12 @@ for table in tableNames:
     clazz = {
         'java_class_name': className,
         'java_file_name': fileName,
-        'columns': []
+        'columns': {}
     }
     
     c.execute('PRAGMA table_info("%s")' % (table))
     for row in c:
-        clazz['columns'].append({
-            'column_name': row[1],
+        clazz['columns'][row[1]] = {
             'java_type': javaTypes[row[2]],
             'java_column_const': 'COLUMN_' + row[1].upper(),
             'ormlite_type': ormliteTypes[row[2]],
@@ -110,17 +109,38 @@ for table in tableNames:
             'getter_name': 'get' + underscoreToCamelcase(row[1], True),
             'is_key': (True if row[2][-5:] == ' PKEY' else False),
             'not_null': bool(row[3]),
-        })
+            'order': int(row[0]), # So I don't have to use an OrderedDict
+        }
 
     classes[table] = clazz
 
-# Look for foreign fields using <column_name>Id
+# Look for foreign fields using <column_name>_id
+for (fromTableName, fromTable) in classes.items():
+    for (fromColumnName, fromCol) in fromTable['columns'].items():
+        if len(fromColumnName) > 4 and fromColumnName[-4:] == 's_id':
+            toTableName = fromColumnName[:-3]
+            print "Found foreign relationship from %s to %s." % (fromTableName, toTableName)
+            if toTableName in classes:
+                toTable = classes[toTableName]
+                toTable['requires_foreign_imports'] = True
+                memberName = underscoreToCamelcase(fromTableName, False)
+                getterName = 'get' + underscoreToCamelcase(fromTableName, True)
+                print "Creating field %s in class %s." % (fromTableName, toTable['java_class_name'])
+                toTable['columns'][fromTableName] = {
+                    'not_null': False,
+                    'member_name': memberName,
+                    'getter_name': getterName,
+                    'foreign': True,
+                    'java_type': 'ForeignCollection<%s>' % (fromTable['java_class_name']),
+                    'order': 99999,
+                }
+
 
 # Output to Java files
 for (table, clazz) in classes.items():
     fileName = clazz['java_file_name']
     className = clazz['java_class_name']
-    type_data = clazz['columns']
+    type_data = sorted(clazz['columns'].items(), lambda x, y: cmp(x[1]['order'], y[1]['order']))
     print "Creating ", fileName
 
     f = open(fileName, 'w')
@@ -131,6 +151,9 @@ for (table, clazz) in classes.items():
     f.write('import com.j256.ormlite.field.DataType;\n')
     f.write('import com.j256.ormlite.field.DatabaseField;\n')
     f.write('import com.j256.ormlite.table.DatabaseTable;\n')
+    if 'requires_foreign_imports' in clazz:
+        f.write('import com.j256.ormlite.dao.ForeignCollection;\n')
+        f.write('import com.j256.ormlite.field.ForeignCollectionField;\n')
     f.write('\n')
 
     f.write('@DatabaseTable(tableName = "%s")\n' % (table))
@@ -140,22 +163,27 @@ for (table, clazz) in classes.items():
     f.write('\n')
 
     # Generate COLUMN_* constants to help with querying
-    for data in type_data:
-        f.write('    ')
-        f.write('public static final String %s = "%s";\n' % (data['java_column_const'],
-                                                             data['column_name']))
+    #for (column_name, data) in type_data.items():
+    for (column_name, data) in type_data:
+        if 'java_column_const' in data:
+            f.write('    ')
+            f.write('public static final String %s = "%s";\n' % (data['java_column_const'],
+                                                                 column_name))
     f.write('\n')
 
     # Generate types
-    for data in type_data:
+    for (column_name, data) in type_data:
         f.write('    ')
-        f.write('@DatabaseField(dataType = DataType.')
-        f.write(data['ormlite_type'])
-        if data['not_null'] == True:
-            f.write(', canBeNull = false')
-        f.write(', columnName = ')
-        f.write(data['java_column_const'])
-        f.write(')\n')
+        if 'foreign' in data:
+            f.write('@ForeignCollectionField\n')
+        else:
+            f.write('@DatabaseField(dataType = DataType.')
+            f.write(data['ormlite_type'])
+            if data['not_null'] == True:
+                f.write(', canBeNull = false')
+            f.write(', columnName = ')
+            f.write(data['java_column_const'])
+            f.write(')\n')
 
         f.write('    ')
         f.write('private %s %s;\n' % (data['java_type'],
@@ -169,7 +197,7 @@ for (table, clazz) in classes.items():
     f.write('() { /* Empty constructor for ORMlite */ }\n')
     f.write('\n')
 
-    for data in type_data:
+    for (column_name, data) in type_data:
         f.write('    public %s %s() {\n' % (data['java_type'], data['getter_name']))
         f.write('        return %s;\n' % (data['member_name']))
         f.write('    }\n');
