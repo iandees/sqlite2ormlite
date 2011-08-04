@@ -131,11 +131,8 @@ for table in tableNames:
     # Generate COLUMN_* constants to help with querying
     for data in type_data:
         f.write('    ')
-        f.write('public static final String ')
-        f.write(data['java_column_const'])
-        f.write(' = "')
-        f.write(data['column_name'])
-        f.write('";\n')
+        f.write('public static final String %s = "%s";\n' % (data['java_column_const'],
+                                                             data['column_name']))
     f.write('\n')
 
     # Generate types
@@ -150,12 +147,9 @@ for table in tableNames:
         f.write(')\n')
 
         f.write('    ')
-        f.write('private ')
-        f.write(data['java_type'])
-        f.write(' ')
-        f.write(data['member_name'])
-        f.write(';\n')
-    
+        f.write('private %s %s;\n' % (data['java_type'],
+                                      data['member_name']))
+
         f.write('\n')
 
     # Generate required no-arg constructor
@@ -165,15 +159,8 @@ for table in tableNames:
     f.write('\n')
 
     for data in type_data:
-        f.write('    ')
-        f.write('public ')
-        f.write(data['java_type'])
-        f.write(' ')
-        f.write(data['getter_name'])
-        f.write('() {\n')
-        f.write('        return ')
-        f.write(data['member_name'])
-        f.write(';\n')
+        f.write('    public %s %s() {\n' % (data['java_type'], data['getter_name']))
+        f.write('        return %s;\n' % (data['member_name']))
         f.write('    }\n');
 
         f.write('\n')
