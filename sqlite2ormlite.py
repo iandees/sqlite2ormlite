@@ -117,7 +117,6 @@ for table in tableNames:
     type_data = []
     c.execute('PRAGMA table_info("%s")' % (table))
     for row in c:
-        print row[3]
         type_data.append({
             'column_name': row[1],
             'java_type': javaTypes[row[2]],
